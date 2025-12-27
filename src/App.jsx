@@ -2,7 +2,7 @@ import axios from "axios";
 import "./App.css";
 import SearchBar from "./components/SearchBar";
 import WeatherCard from "./components/WeatherCard";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 function App() {
   const [weatherInfo, setWeatherInfo] = useState(null);
@@ -10,7 +10,12 @@ function App() {
   const [currentCity, setCurrentCity] = useState("");
   const [error, setError] = useState("");
 
+  const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
+
   const fetchWeather = async (city) => {
+    if (!city || city.trim() === "") {
+      return;
+    }
     setCurrentCity(city);
     console.log("Ищем город:", city);
 
@@ -19,7 +24,6 @@ function App() {
     setWeatherInfo(null);
 
     try {
-      const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
       if (!API_KEY) {
         throw new Error("API ключ не настроен");
       }
@@ -37,6 +41,10 @@ function App() {
       clearTimeout(timeoutId);
 
       const data = await response.data;
+
+      if (data.cod == 404) {
+        throw new Error("Город не найден");
+      }
 
       if (data.cod !== 200) {
         throw new Error("Ошибка:", data.message || "Неизвестная ошибка API");
@@ -60,6 +68,29 @@ function App() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setError("Ваш браузер не поддерживает геолокацию");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      let lat = position.coords.latitude;
+      let lon = position.coords.longitude;
+      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&lang=ru`;
+      const response = await axios.get(url, {
+        // signal: controller.signal,
+        // timeout: 10000,
+      });
+      console.log("Ваше местоположение", response.data.name),
+        {
+          enableHighAccuracy: true, // ← важно!
+          maximumAge: 0, // ← не использовать кеш
+          timeout: 10000,
+        };
+    });
+  }, []);
   return (
     <div>
       <h1>Погода</h1>
@@ -67,6 +98,21 @@ function App() {
       {isLoading && <div>Загрузка...</div>}
       {error && <div>Ошибка {error}</div>}
       {weatherInfo && <WeatherCard value={currentCity} data={weatherInfo} />}
+      <button
+        onClick={() => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) =>
+              console.log(
+                "Координаты:",
+                pos.coords.latitude,
+                pos.coords.longitude
+              ),
+            (err) => console.log("Ошибка:", err)
+          );
+        }}
+      >
+        Проверить координаты
+      </button>
     </div>
   );
 }
